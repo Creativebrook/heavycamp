@@ -276,3 +276,8 @@ header{
   .empty-state{align-items:flex-start;padding:20px}
   .overlay-page{padding-left:16px;padding-right:16px}
 }
+
+.library-empty{min-height:150px;display:flex;align-items:center;justify-content:center;gap:14px;padding:28px 18px;color:#aeb9c8;text-align:left}
+.library-empty svg{color:var(--cyan);flex:0 0 auto}
+.library-empty b{display:block;font-size:16px;color:#eef5ff;margin-bottom:5px}
+.library-empty p{margin:0;max-width:560px;color:var(--muted);line-height:1.55;font-size:13px}
