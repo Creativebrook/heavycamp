@@ -193,7 +193,9 @@ header{
 .pills{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}
 .pills button{padding:7px 10px;background:#0b121c;color:#8b98aa;border:1px solid var(--line);font-size:10px}
 .pills button.active{background:var(--cyan);color:#04111a}
-.push-button{display:inline-flex!important;align-items:center;justify-content:center;gap:8px;max-width:100%;white-space:normal;text-align:center;margin-top:6px}
+.push-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.push-button{display:inline-flex!important;align-items:center;justify-content:center;gap:8px;max-width:100%;white-space:normal;text-align:center}
+.push-test{background:#111b29!important;color:#d8e4f2!important;border:1px solid var(--line)!important}
 .settings-help{display:block;margin-top:12px}
 .notification-window{display:grid;grid-template-columns:1fr auto;gap:3px 12px;align-items:center;padding:10px 0;color:#c7d1df}
 .notification-window b{font-size:14px}
