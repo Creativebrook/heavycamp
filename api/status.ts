@@ -9,11 +9,12 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     configured: {
       accessKey: Boolean(process.env.HEAVYCAMP_ACCESS_KEY),
       bandcamp: bandcampConfigured(),
+      jamendo: Boolean(process.env.JAMENDO_CLIENT_ID),
+      audius: true,
       database: dbConfigured(),
       push: Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY),
-      cronSecret: Boolean(process.env.CRON_SECRET),
-      jamendo: Boolean(process.env.JAMENDO_CLIENT_ID)
+      cronSecret: Boolean(process.env.CRON_SECRET)
     },
-    version: '0.1.3'
+    version: '0.2.0'
   })
 }
