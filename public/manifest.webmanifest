@@ -13,9 +13,9 @@
   ],
   "icons": [
     {
-      "src": "/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ],
@@ -26,9 +26,9 @@
       "url": "/?view=discover",
       "icons": [
         {
-          "src": "/icon.svg",
-          "sizes": "any",
-          "type": "image/svg+xml"
+          "src": "/icon-512.png",
+          "sizes": "512x512",
+          "type": "image/png"
         }
       ]
     },
@@ -38,9 +38,9 @@
       "url": "/?view=liked",
       "icons": [
         {
-          "src": "/icon.svg",
-          "sizes": "any",
-          "type": "image/svg+xml"
+          "src": "/icon-512.png",
+          "sizes": "512x512",
+          "type": "image/png"
         }
       ]
     },
@@ -50,9 +50,9 @@
       "url": "/?view=playlists",
       "icons": [
         {
-          "src": "/icon.svg",
-          "sizes": "any",
-          "type": "image/svg+xml"
+          "src": "/icon-512.png",
+          "sizes": "512x512",
+          "type": "image/png"
         }
       ]
     }
