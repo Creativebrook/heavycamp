@@ -22,7 +22,7 @@ const fmt=(seconds:number)=>{
   const value=Math.max(0,Number(seconds)||0)
   return `${Math.floor(value/60)}:${Math.floor(value%60).toString().padStart(2,'0')}`
 }
-const cover=(track?:Track|null)=>track?.artworkUrl||(track?.coverArt?`/api/cover?id=${encodeURIComponent(track.coverArt)}`:'/icon-512.png')
+const cover=(track?:Track|null)=>track?.artworkUrl||(track?.coverArt?`/api/cover?id=${encodeURIComponent(track.coverArt)}`:'/icon-192.png')
 const dateValue=(track:Track)=>track.created?Date.parse(track.created)||0:(track.year?Date.parse(`${track.year}-01-01`):0)
 const mix=<T,>(items:T[])=>{const copy=[...items];for(let i=copy.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[copy[i],copy[j]]=[copy[j],copy[i]]}return copy}
 const uniqueTracks=(items:Track[])=>{const seen=new Set<string>();return items.filter(track=>track?.id&&!seen.has(track.id)&&(seen.add(track.id),true))}
@@ -82,7 +82,7 @@ function Unlock({onDone}:{onDone:()=>void}){
       event.preventDefault();setBusy(true);setError('')
       try{await createSession(key);onDone()}catch(error){setError(error instanceof Error?error.message:'Unlock failed')}finally{setBusy(false)}
     }}>
-      <img src="/icon-512.png" alt="HeavyCamp"/>
+      <img src="/icon-192.png" alt="HeavyCamp"/>
       <p className="eyebrow">PRIVATE METAL PLAYER</p>
       <h1>HeavyCamp</h1>
       <p>Bandcamp collection plus free metal discovery from Jamendo and Audius.</p>
@@ -366,7 +366,7 @@ export default function App(){
         title:current.title,
         artist:current.artist,
         album:current.album,
-        artwork:[{src:cover(current),sizes:'512x512'}]
+        artwork:[{src:cover(current),sizes:'192x192'}]
       })
     }
   },[current,audio])
@@ -461,7 +461,7 @@ export default function App(){
     setToast('Removed from playlist')
   }
 
-  if(locked===null)return <div className="splash"><img src="/icon-512.png"/><strong>HeavyCamp</strong></div>
+  if(locked===null)return <div className="splash"><img src="/icon-192.png"/><strong>HeavyCamp</strong></div>
   if(locked)return <Unlock onDone={()=>setLocked(false)}/>
 
   const likedDisplay=uniqueTracks(likedTracks)
@@ -471,7 +471,7 @@ export default function App(){
   return <div className="app">
     <header>
       <button className="brand" onClick={()=>setView('home')}>
-        <img src="/icon-512.png" alt="HeavyCamp"/>
+        <img src="/icon-192.png" alt="HeavyCamp"/>
         <span><b>HeavyCamp</b><small>DISCOVER · HEAR · BELIEVE</small></span>
       </button>
       <div className="header-sources">
