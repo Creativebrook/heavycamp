@@ -1,5 +1,5 @@
 import { neon } from '@neondatabase/serverless'
-import type { BandcampTrack } from './bandcamp'
+import type { BandcampTrack } from './bandcamp.js'
 
 export const migration = [
  `CREATE EXTENSION IF NOT EXISTS pgcrypto`,
