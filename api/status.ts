@@ -13,6 +13,6 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
       push: Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY),
       cronSecret: Boolean(process.env.CRON_SECRET)
     },
-    version: '0.1.1'
+    version: '0.1.2'
   })
 }
