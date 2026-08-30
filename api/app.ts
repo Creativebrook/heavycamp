@@ -1,7 +1,7 @@
 import type { VercelRequest,VercelResponse } from '@vercel/node'
-import { requireAccess } from '../server/auth'
-import { bandcampConfigured,getLibraryTracks } from '../server/bandcamp'
-import { bootstrap,dbConfigured,getPlaylists,history,playlistAction,preference,savePush,saveSettings,saveState,syncTracks,userData } from '../server/storage'
+import { requireAccess } from '../server/auth.js'
+import { bandcampConfigured,getLibraryTracks } from '../server/bandcamp.js'
+import { bootstrap,dbConfigured,getPlaylists,history,playlistAction,preference,savePush,saveSettings,saveState,syncTracks,userData } from '../server/storage.js'
 const body=(req:VercelRequest)=>typeof req.body==='string'?JSON.parse(req.body):req.body||{}
 export default async function handler(req:VercelRequest,res:VercelResponse){if(!requireAccess(req,res))return;const action=String(req.query.action||'');try{
 if(action==='health')return res.json({ok:true,bandcamp:bandcampConfigured(),database:dbConfigured(),push:Boolean(process.env.VAPID_PUBLIC_KEY&&process.env.VAPID_PRIVATE_KEY),version:'0.1.0'})
