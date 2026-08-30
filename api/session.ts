@@ -1,0 +1,3 @@
+import type { VercelRequest,VercelResponse } from '@vercel/node'
+import { clearSession,setSession,validateKey } from '../server/auth'
+export default function handler(req:VercelRequest,res:VercelResponse){if(req.method==='DELETE'){clearSession(res);return res.status(200).json({ok:true})}if(req.method!=='POST')return res.status(405).end();if(!process.env.HEAVYCAMP_ACCESS_KEY)return res.status(503).json({error:'HEAVYCAMP_ACCESS_KEY is not configured'});const b=typeof req.body==='string'?JSON.parse(req.body):req.body||{};if(!validateKey(String(b.key||'')))return res.status(401).json({error:'Invalid access key'});setSession(res);return res.status(200).json({ok:true})}

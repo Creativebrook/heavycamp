@@ -1,0 +1,8 @@
+import type { PushSubscriptionJSON } from './types'
+
+async function err(r:Response){try{return (await r.json()).error||`Request failed (${r.status})`}catch{return `Request failed (${r.status})`}}
+export async function createSession(key:string){const r=await fetch('/api/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key})});if(!r.ok)throw new Error(await err(r))}
+export async function logout(){await fetch('/api/session',{method:'DELETE'})}
+export async function api<T=any>(action:string,options:{method?:string;body?:unknown}={}){const r=await fetch(`/api/app?action=${encodeURIComponent(action)}`,{method:options.method||'GET',headers:options.body?{'Content-Type':'application/json'}:undefined,body:options.body?JSON.stringify(options.body):undefined});if(!r.ok)throw new Error(await err(r));return r.json() as Promise<T>}
+function b64(s:string){const p='='.repeat((4-s.length%4)%4);const raw=atob((s+p).replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)))}
+export async function subscribePush(){const c=await api<{vapidPublicKey:string|null}>('config');if(!c.vapidPublicKey)throw new Error('Push is not configured on Vercel yet.');if(!('serviceWorker'in navigator)||!('PushManager'in window))throw new Error('Push is not supported on this device/browser.');if(await Notification.requestPermission()!=='granted')throw new Error('Notification permission was not granted.');const reg=await navigator.serviceWorker.ready;let s=await reg.pushManager.getSubscription();if(!s)s=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64(c.vapidPublicKey)});await api('push',{method:'POST',body:{subscription:s.toJSON() as PushSubscriptionJSON}})}
