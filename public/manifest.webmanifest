@@ -1,18 +1,60 @@
 {
   "name": "HeavyCamp",
   "short_name": "HeavyCamp",
-  "description": "Metal-first player for your Bandcamp collection.",
+  "description": "Metal-first PWA for Bandcamp, Jamendo and Audius.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#05070b",
   "theme_color": "#05070b",
   "orientation": "portrait-primary",
-  "categories": ["music", "entertainment"],
+  "categories": [
+    "music",
+    "entertainment"
+  ],
   "icons": [
-    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
   ],
   "shortcuts": [
-    { "name": "Liked", "short_name": "Liked", "url": "/?view=liked", "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }] },
-    { "name": "Playlists", "short_name": "Playlists", "url": "/?view=playlists", "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }] }
+    {
+      "name": "Discover",
+      "short_name": "Discover",
+      "url": "/?view=discover",
+      "icons": [
+        {
+          "src": "/icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Liked",
+      "short_name": "Liked",
+      "url": "/?view=liked",
+      "icons": [
+        {
+          "src": "/icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Playlists",
+      "short_name": "Playlists",
+      "url": "/?view=playlists",
+      "icons": [
+        {
+          "src": "/icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
   ]
 }
