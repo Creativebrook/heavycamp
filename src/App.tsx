@@ -608,46 +608,85 @@ export default function App(){
         {needsDb&&<div className="notice"><b>Neon needs initialization.</b><button onClick={async()=>{
           try{await api('bootstrap',{method:'POST'});setNeedsDb(false);setToast('Neon initialized');await load()}catch(error){setToast(error instanceof Error?error.message:'Initialization failed')}
         }}>Initialize database</button></div>}
-        <div className="settings-grid">
-          <div className="card">
-            <h3>Playback</h3>
-            <label>Default mode<select value={settings.defaultMode} onChange={event=>setSettings({...settings,defaultMode:event.target.value as any})}><option value="sequential">In order</option><option value="shuffle">Random</option></select></label>
-            <label className="toggle">Autoplay next<input type="checkbox" checked={settings.autoplay} onChange={event=>setSettings({...settings,autoplay:event.target.checked})}/></label>
-          </div>
-          <div className="card">
-            <h3><Compass size={18}/> Music sources</h3>
-            <div className="source-status"><span>Bandcamp <b className={health.bandcamp?'online':'offline'}>{health.bandcamp?'Connected':'Unavailable'}</b></span><span>Jamendo <b className={health.jamendo?'online':'offline'}>{health.jamendo?'Connected':'Unavailable'}</b></span><span>Audius <b className="online">Connected</b></span></div>
-            <p>Bandcamp supplies your personal collection. Jamendo powers free discovery. Audius adds trending and experimental discovery.</p>
-          </div>
-          <div className="card">
-            <h3><Bell size={18}/> Morning notifications</h3>
-            <label className="toggle">Enable push<input type="checkbox" checked={settings.notificationsEnabled} onChange={event=>setSettings({...settings,notificationsEnabled:event.target.checked})}/></label>
-            <div className="notification-window"><span>Delivery</span><b>Morning digest</b><small>Scheduled around 08:00 in Portugal.</small></div>
-            <div className="pills">{discover.genres.map(value=><button key={value} className={settings.notificationGenres.includes(value)?'active':''} onClick={()=>setSettings({...settings,notificationGenres:settings.notificationGenres.includes(value)?settings.notificationGenres.filter(item=>item!==value):[...settings.notificationGenres,value]})}>{value}</button>)}</div>
-            <div className="push-actions">
-              <button className="push-button" onClick={async()=>{
-                try{
-                  await subscribePush()
-                  const nextSettings={...settings,notificationsEnabled:true}
-                  setSettings(nextSettings)
-                  if(!needsDb)await api('settings',{method:'POST',body:nextSettings})
-                  setToast('Push notifications enabled on this device')
-                }catch(error){setToast(error instanceof Error?error.message:'Push failed')}
-              }}><Bell size={16}/> Enable on this device</button>
-              <button className="push-test" onClick={async()=>{
-                try{const result=await api<{sent:number;total:number}>('testPush',{method:'POST'});setToast(result.sent?`Test notification sent (${result.sent}/${result.total})`:'Push test did not reach a device')}
-                catch(error){setToast(error instanceof Error?error.message:'Push test failed')}
-              }}>Send test notification</button>
+        <div className="settings-grid settings-grid-v2">
+          <div className="card settings-card settings-playback">
+            <div className="settings-card-head">
+              <div><p className="settings-kicker">LISTENING</p><h3>Playback</h3></div>
             </div>
-            <small className="settings-help">HeavyCamp scans Bandcamp, Jamendo and Audius each morning and alerts you only about new music matching your selected genres.</small>
+            <div className="settings-row">
+              <span><b>Default mode</b><small>Choose how every queue starts.</small></span>
+              <select aria-label="Default playback mode" value={settings.defaultMode} onChange={event=>setSettings({...settings,defaultMode:event.target.value as any})}><option value="sequential">In order</option><option value="shuffle">Random</option></select>
+            </div>
+            <label className="settings-row settings-toggle-row">
+              <span><b>Autoplay next</b><small>Continue to the next track automatically.</small></span>
+              <input className="switch" type="checkbox" checked={settings.autoplay} onChange={event=>setSettings({...settings,autoplay:event.target.checked})}/>
+            </label>
           </div>
-          <div className="card">
-            <h3><Sparkles size={18}/> Smart Hero</h3>
-            <p>Likes, complete plays, repeats, skips, artist affinity, subgenres, recency and source diversity shape the launch recommendation.</p>
-            <div className="pills">{discover.genres.slice(0,8).map(value=><button key={value} className={settings.preferredGenres.includes(value)?'active':''} onClick={()=>setSettings({...settings,preferredGenres:settings.preferredGenres.includes(value)?settings.preferredGenres.filter(item=>item!==value):[...settings.preferredGenres,value]})}>{value}</button>)}</div>
+
+          <div className="card settings-card settings-smart">
+            <div className="settings-card-head">
+              <div><p className="settings-kicker">DISCOVERY</p><h3><Sparkles size={18}/> Smart Hero</h3></div>
+            </div>
+            <p className="settings-intro">Your likes, complete plays, repeats, skips and artist affinity shape the launch recommendation.</p>
+            <div className="settings-subhead"><span>Preferred subgenres</span><small>{settings.preferredGenres.length} selected</small></div>
+            <div className="pills settings-pills">{discover.genres.slice(0,8).map(value=><button key={value} className={settings.preferredGenres.includes(value)?'active':''} onClick={()=>setSettings({...settings,preferredGenres:settings.preferredGenres.includes(value)?settings.preferredGenres.filter(item=>item!==value):[...settings.preferredGenres,value]})}>{value}</button>)}</div>
+          </div>
+
+          <div className="card settings-card settings-notifications">
+            <div className="settings-card-head settings-card-head-inline">
+              <div><p className="settings-kicker">ALERTS</p><h3><Bell size={18}/> Morning notifications</h3></div>
+              <label className="compact-switch">
+                <input className="switch" type="checkbox" checked={settings.notificationsEnabled} onChange={event=>setSettings({...settings,notificationsEnabled:event.target.checked})}/>
+                <span>{settings.notificationsEnabled?'On':'Off'}</span>
+              </label>
+            </div>
+
+            <div className="settings-notification-grid">
+              <div className="settings-notification-meta">
+                <div className="settings-info-row">
+                  <span><b>Delivery</b><small>Daily release digest</small></span>
+                  <strong>08:00</strong>
+                </div>
+                <small className="settings-help">Scheduled for the morning in Portugal. HeavyCamp scans Bandcamp, Jamendo and Audius and only alerts you about matching new music.</small>
+                <div className="push-actions">
+                  <button className="push-button" onClick={async()=>{
+                    try{
+                      await subscribePush()
+                      const nextSettings={...settings,notificationsEnabled:true}
+                      setSettings(nextSettings)
+                      if(!needsDb)await api('settings',{method:'POST',body:nextSettings})
+                      setToast('Push notifications enabled on this device')
+                    }catch(error){setToast(error instanceof Error?error.message:'Push failed')}
+                  }}><Bell size={16}/> Enable on this device</button>
+                  <button className="push-test" onClick={async()=>{
+                    try{const result=await api<{sent:number;total:number}>('testPush',{method:'POST'});setToast(result.sent?`Test notification sent (${result.sent}/${result.total})`:'Push test did not reach a device')}
+                    catch(error){setToast(error instanceof Error?error.message:'Push test failed')}
+                  }}>Send test</button>
+                </div>
+              </div>
+
+              <div className="settings-genre-panel">
+                <div className="settings-subhead"><span>Notification subgenres</span><small>{settings.notificationGenres.length} selected</small></div>
+                <div className="pills settings-pills settings-pills-notify">{discover.genres.map(value=><button key={value} className={settings.notificationGenres.includes(value)?'active':''} onClick={()=>setSettings({...settings,notificationGenres:settings.notificationGenres.includes(value)?settings.notificationGenres.filter(item=>item!==value):[...settings.notificationGenres,value]})}>{value}</button>)}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="card settings-card settings-sources">
+            <div className="settings-card-head">
+              <div><p className="settings-kicker">SYSTEM</p><h3><Compass size={18}/> Music sources</h3></div>
+            </div>
+            <div className="source-status source-status-compact">
+              <span><i className={health.bandcamp?'online':'offline'}></i><div><b>Bandcamp</b><small>Personal collection</small></div><em className={health.bandcamp?'online':'offline'}>{health.bandcamp?'Connected':'Unavailable'}</em></span>
+              <span><i className={health.jamendo?'online':'offline'}></i><div><b>Jamendo</b><small>Free discovery</small></div><em className={health.jamendo?'online':'offline'}>{health.jamendo?'Connected':'Unavailable'}</em></span>
+              <span><i className="online"></i><div><b>Audius</b><small>Trending discovery</small></div><em className="online">Connected</em></span>
+            </div>
           </div>
         </div>
-        <button className="primary" disabled={needsDb} onClick={async()=>{await api('settings',{method:'POST',body:settings});setToast('Settings saved')}}>Save settings</button>
+        <div className="settings-actions">
+          <span><b>HeavyCamp settings</b><small>Save to keep these preferences across devices.</small></span>
+          <button className="primary settings-save" disabled={needsDb} onClick={async()=>{await api('settings',{method:'POST',body:settings});setToast('Settings saved')}}>Save settings</button>
+        </div>
       </section>}
     </main>
 
