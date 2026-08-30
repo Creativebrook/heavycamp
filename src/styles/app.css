@@ -921,3 +921,109 @@ main{width:100%}
   }
   .track-rail::-webkit-scrollbar{display:none}
 }
+
+
+@media(max-width:719px){
+  .settings-page{
+    padding-top:18px
+  }
+  .settings-page .page-heading{
+    margin-bottom:14px
+  }
+  .settings-page .page-heading h1{
+    font-size:30px;
+    margin-top:4px
+  }
+  .settings-page .page-heading>p:not(.eyebrow){
+    font-size:13px
+  }
+  .settings-grid-v2{
+    grid-template-columns:1fr;
+    gap:10px;
+    margin-top:12px
+  }
+  .settings-playback,
+  .settings-smart,
+  .settings-notifications,
+  .settings-sources{
+    grid-column:1
+  }
+  .settings-card{
+    padding:16px;
+    border-radius:18px
+  }
+  .settings-card-head{
+    margin-bottom:12px
+  }
+  .settings-card-head h3{
+    font-size:18px
+  }
+  .settings-row{
+    min-height:60px
+  }
+  .settings-row select{
+    min-width:114px
+  }
+  .settings-notification-grid{
+    grid-template-columns:1fr;
+    gap:14px
+  }
+  .settings-notification-meta{
+    padding-right:0;
+    border-right:0
+  }
+  .settings-genre-panel{
+    padding-top:14px;
+    border-top:1px solid var(--line)
+  }
+  .settings-pills{
+    display:flex;
+    flex-wrap:nowrap;
+    overflow-x:auto;
+    overflow-y:hidden;
+    padding:0 0 4px;
+    margin-right:-16px;
+    padding-right:16px;
+    scrollbar-width:none;
+    overscroll-behavior-inline:contain;
+    -webkit-overflow-scrolling:touch
+  }
+  .settings-pills::-webkit-scrollbar{
+    display:none
+  }
+  .settings-pills button{
+    flex:0 0 auto
+  }
+  .push-actions{
+    display:grid;
+    grid-template-columns:1fr auto
+  }
+  .push-button,.push-test{
+    min-height:42px
+  }
+  .source-status-compact{
+    grid-template-columns:1fr
+  }
+  .source-status-compact>span{
+    padding:11px 12px
+  }
+  .settings-actions{
+    flex-direction:column;
+    align-items:stretch;
+    gap:9px;
+    padding-top:4px
+  }
+  .settings-actions>span{
+    padding:0 2px
+  }
+  .settings-save{
+    width:100%;
+    min-height:48px
+  }
+}
+
+@media(min-width:720px){
+  .settings-grid-v2{
+    grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr)
+  }
+}
