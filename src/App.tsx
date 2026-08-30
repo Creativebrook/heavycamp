@@ -651,11 +651,11 @@ export default function App(){
       </section>}
     </main>
 
-    {view!=='home'&&current&&<button className="mini-player" onClick={()=>setView('home')}>
+    {view!=='home'&&current&&<div className="mini-player" role="button" tabIndex={0} onClick={()=>setView('home')} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();setView('home')}}}>
       <img src={cover(current)} alt=""/>
       <span><b>{current.title}</b><small>{current.artist} · {sourceName(current)}</small></span>
-      <button onClick={event=>{event.stopPropagation();playing?audio.pause():void audio.play()}}>{playing?<Pause size={18} fill="currentColor"/>:<Play size={18} fill="currentColor"/>}</button>
-    </button>}
+      <button aria-label={playing?'Pause':'Play'} onClick={event=>{event.stopPropagation();playing?audio.pause():void audio.play()}}>{playing?<Pause size={18} fill="currentColor"/>:<Play size={18} fill="currentColor"/>}</button>
+    </div>}
 
     <nav className="nav">
       {([
