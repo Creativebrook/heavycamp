@@ -11,8 +11,9 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
       bandcamp: bandcampConfigured(),
       database: dbConfigured(),
       push: Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY),
-      cronSecret: Boolean(process.env.CRON_SECRET)
+      cronSecret: Boolean(process.env.CRON_SECRET),
+      jamendo: Boolean(process.env.JAMENDO_CLIENT_ID)
     },
-    version: '0.1.2'
+    version: '0.1.3'
   })
 }
