@@ -296,7 +296,17 @@ main{width:100%}
 .discover-search label>button{
   border:0;background:transparent;color:#8796a9;display:grid;place-items:center;padding:4px
 }
-.genre-scroll{display:flex;gap:7px;overflow-x:auto;padding-top:12px;scrollbar-width:none}
+.genre-scroll{
+  display:flex;
+  gap:7px;
+  overflow-x:auto;
+  overflow-y:hidden;
+  padding-top:12px;
+  scroll-behavior:smooth;
+  scrollbar-width:none;
+  overscroll-behavior-inline:contain;
+  -webkit-overflow-scrolling:touch
+}
 .genre-scroll::-webkit-scrollbar{display:none}
 .genre-scroll button,.pills button,.ghost-button{
   white-space:nowrap;
@@ -338,10 +348,29 @@ main{width:100%}
   grid-auto-flow:column;
   grid-auto-columns:minmax(190px,230px);
   overflow-x:auto;
+  overflow-y:hidden;
   gap:12px;
-  padding-bottom:6px;
+  padding:0 0 12px;
   scroll-snap-type:x proximity;
-  scrollbar-width:thin
+  scroll-padding-inline:4px;
+  scrollbar-width:thin;
+  scrollbar-color:#2b6788 #07101a;
+  overscroll-behavior-inline:contain
+}
+.track-rail::-webkit-scrollbar{height:7px}
+.track-rail::-webkit-scrollbar-track{
+  background:#07101a;
+  border-radius:999px;
+  box-shadow:inset 0 0 0 1px #ffffff0b
+}
+.track-rail::-webkit-scrollbar-thumb{
+  background:linear-gradient(90deg,#1e5376,#2f87b3 55%,#37bfe8);
+  border-radius:999px;
+  border:1px solid #07101a;
+  box-shadow:0 0 10px #25baf040
+}
+.track-rail::-webkit-scrollbar-thumb:hover{
+  background:linear-gradient(90deg,#2875a2,#3aa7d6 55%,#55d6f8)
 }
 .discover-card{
   scroll-snap-align:start;
@@ -603,4 +632,9 @@ main{width:100%}
   .playlist-covers{width:74px;height:74px}
   .nav small{font-size:7px}
   .nav svg{width:20px}
+  .track-rail{
+    padding-bottom:6px;
+    scrollbar-width:none;
+  }
+  .track-rail::-webkit-scrollbar{display:none}
 }
