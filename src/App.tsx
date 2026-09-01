@@ -175,6 +175,12 @@ export default function App(){
   const[discoverBusy,setDiscoverBusy]=useState(false)
   const[selectedPlaylist,setSelectedPlaylist]=useState<string|null>(null)
 
+  useEffect(()=>{
+    if(!toast)return
+    const timer=window.setTimeout(()=>setToast(''),2800)
+    return()=>window.clearTimeout(timer)
+  },[toast])
+
   const queueRef=useRef<string[]>([])
   const idxRef=useRef(0)
   const currentRef=useRef<Track|null>(null)
@@ -719,6 +725,6 @@ export default function App(){
       </div>
     </div>}
 
-    {toast&&<button className="toast" onClick={()=>setToast('')}>{toast}</button>}
+    {toast&&<button className="toast" role="status" aria-live="polite" onClick={()=>setToast('')}>{toast}</button>}
   </div>
 }
