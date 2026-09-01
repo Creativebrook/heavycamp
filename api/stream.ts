@@ -22,15 +22,15 @@ export default async function handler(req:VercelRequest,res:VercelResponse){
     const headers:Record<string,string>={}
     if(req.headers.range)headers.Range=req.headers.range
 
-    let url:URL|string
     if(id.startsWith('jamendo:')||id.startsWith('audius:')){
       const remote=await resolveRemoteStream(id)
       if(!remote)return res.status(404).json({error:'Remote stream is unavailable'})
-      url=remote
-    }else{
-      url=endpointUrl('stream',{id})
+      res.setHeader('Cache-Control','private, max-age=120')
+      res.setHeader('Location',remote)
+      return res.status(307).end()
     }
 
+    const url=endpointUrl('stream',{id})
     const up=await fetch(url,{method:req.method,headers,redirect:'follow',signal:AbortSignal.timeout(25000)})
     res.statusCode=up.status
     forwardHeaders(up,res)
