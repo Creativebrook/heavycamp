@@ -155,7 +155,10 @@ function TrackRail({title,subtitle,tracks,onPlay}:{title:string;subtitle:string;
 }
 
 export default function App(){
-  const[audio]=useState(()=>new Audio())
+  const[audioA]=useState(()=>new Audio())
+  const[audioB]=useState(()=>new Audio())
+  const activeAudioRef=useRef<HTMLAudioElement>(audioA)
+  const standbyAudioRef=useRef<HTMLAudioElement>(audioB)
   const[locked,setLocked]=useState<boolean|null>(null)
   const[health,setHealth]=useState({bandcamp:false,jamendo:false,audius:true,database:false,push:false})
   const[library,setLibrary]=useState<Track[]>([])
@@ -190,6 +193,26 @@ export default function App(){
     const timer=window.setTimeout(()=>setToast(''),2800)
     return()=>window.clearTimeout(timer)
   },[toast])
+
+  useEffect(()=>{
+    const players=[audioA,audioB]
+    for(const player of players){
+      player.preload='auto'
+      player.setAttribute('playsinline','')
+      player.style.display='none'
+      player.setAttribute('aria-hidden','true')
+      if(!player.isConnected)document.body.appendChild(player)
+    }
+    return()=>{
+      for(const player of players){
+        player.pause()
+        player.removeAttribute('src')
+        player.load()
+        if(player.parentNode)player.parentNode.removeChild(player)
+      }
+    }
+  },[audioA,audioB])
+
 
   const queueRef=useRef<string[]>([])
   const idxRef=useRef(0)
@@ -286,12 +309,12 @@ export default function App(){
         setQueue(ids);queueRef.current=ids
         setIndex(heroIndex);idxRef.current=heroIndex
         setCurrent(hero);currentRef.current=hero
-        setTimeout(()=>{if(user.state?.positionMs)audio.currentTime=user.state.positionMs/1000},350)
+        setTimeout(()=>{if(user.state?.positionMs)activeAudioRef.current.currentTime=user.state.positionMs/1000},350)
       }
     }catch(error){
       setToast(error instanceof Error?error.message:'Could not load HeavyCamp')
     }
-  },[audio])
+  },[])
 
   useEffect(()=>{api('health').then(()=>setLocked(false)).catch(()=>setLocked(true))},[])
   useEffect(()=>{if(locked===false)void load()},[locked,load])
@@ -354,7 +377,9 @@ export default function App(){
         album:track.album,
         artwork:[
           {src:artwork,sizes:'512x512'},
-          {src:artwork,sizes:'256x256'}
+          {src:artwork,sizes:'384x384'},
+          {src:artwork,sizes:'256x256'},
+          {src:artwork,sizes:'192x192'}
         ]
       })
       if(state)navigator.mediaSession.playbackState=state
@@ -363,175 +388,279 @@ export default function App(){
     }
   },[])
 
-  const loadTrackIntoAudio=useCallback((track:Track,shouldPlay:boolean,forceReload=false)=>{
-    const changed=forceReload||audio.dataset.trackId!==track.id
-    if(changed){
-      audio.dataset.trackId=track.id
-      audio.preload='auto'
-      audio.src=`/api/stream?id=${encodeURIComponent(track.id)}`
-      setPos(0)
-      setDur(track.duration||0)
-      startRef.current=0
+  const streamUrl=useCallback((track:Track)=>`/api/stream?id=${encodeURIComponent(track.id)}`,[])
+
+  const prepareStandby=useCallback((fromIndex:number)=>{
+    const ids=queueRef.current
+    if(ids.length<2)return
+    const nextIndex=(fromIndex+1)%ids.length
+    const nextTrack=allTracksRef.current.find(item=>item.id===ids[nextIndex])
+    if(!nextTrack)return
+
+    const standby=standbyAudioRef.current
+    if(standby===activeAudioRef.current)return
+    if(standby.dataset.trackId===nextTrack.id&&standby.readyState>=2)return
+
+    try{
+      standby.pause()
+      standby.dataset.trackId=nextTrack.id
+      standby.preload='auto'
+      standby.src=streamUrl(nextTrack)
+      standby.load()
+    }catch(error){
+      console.warn('HeavyCamp standby preload failed',error)
+    }
+  },[streamUrl])
+
+  const startPlayer=useCallback((player:HTMLAudioElement,track:Track,nextIndex:number)=>{
+    updateMediaSession(track,'playing')
+    setPlaying(true)
+
+    const tryPlay=()=>{
+      const promise=player.play()
+      if(!promise)return
+      void promise.then(()=>{
+        failedAdvanceRef.current=0
+        if('mediaSession'in navigator){
+          try{navigator.mediaSession.playbackState='playing'}catch{}
+        }
+        prepareStandby(nextIndex)
+      }).catch(error=>{
+        console.warn('HeavyCamp play() failed',error)
+        window.setTimeout(()=>{
+          if(activeAudioRef.current!==player||currentRef.current?.id!==track.id||!player.paused)return
+          void player.play().then(()=>prepareStandby(nextIndex)).catch(retryError=>{
+            console.warn('HeavyCamp play retry failed',retryError)
+          })
+        },300)
+      })
     }
 
+    tryPlay()
+  },[prepareStandby,updateMediaSession])
+
+  const activateTrack=useCallback((
+    track:Track,
+    nextIndex:number,
+    shouldPlay=true,
+    preferStandby=false,
+    reportCurrent=true
+  )=>{
+    const previous=activeAudioRef.current
+    let player=previous
+
+    if(reportCurrent&&currentRef.current?.id!==track.id)report(false)
+
+    const standby=standbyAudioRef.current
+    if(preferStandby&&standby.dataset.trackId===track.id&&standby.readyState>=2){
+      player=standby
+      activeAudioRef.current=standby
+      standbyAudioRef.current=previous
+    }
+
+    const needsSource=player.dataset.trackId!==track.id
+    if(needsSource){
+      player.pause()
+      player.dataset.trackId=track.id
+      player.preload='auto'
+      player.src=streamUrl(track)
+    }
+
+    setIndex(nextIndex);idxRef.current=nextIndex
+    setCurrent(track);currentRef.current=track
+    setPos(0);setDur(track.duration||0);startRef.current=0
     updateMediaSession(track,shouldPlay?'playing':'paused')
 
     if(shouldPlay){
-      const promise=audio.play()
-      if(promise){
-        void promise.then(()=>{
-          if('mediaSession'in navigator){
-            try{navigator.mediaSession.playbackState='playing'}catch{}
-          }
-        }).catch(error=>{
-          console.warn('HeavyCamp play() failed',error)
-          if('mediaSession'in navigator){
-            try{navigator.mediaSession.playbackState='paused'}catch{}
-          }
-        })
+      startPlayer(player,track,nextIndex)
+      if(player!==previous){
+        const old=previous
+        const finishSwap=()=>{
+          if(activeAudioRef.current!==player)return
+          old.pause()
+          old.removeAttribute('src')
+          delete old.dataset.trackId
+          old.load()
+          player.removeEventListener('playing',finishSwap)
+        }
+        player.addEventListener('playing',finishSwap,{once:true})
       }
-    }else if(changed){
-      audio.load()
+    }else{
+      player.load()
+      prepareStandby(nextIndex)
     }
-  },[audio,updateMediaSession])
+  },[prepareStandby,report,startPlayer,streamUrl,updateMediaSession])
 
   const playTrack=useCallback((track:Track,list:Track[]=homeTracks,autoplay=true)=>{
-    const changed=currentRef.current?.id!==track.id
-    if(changed)report(false)
     let ids=uniqueTracks(list).map(item=>item.id)
     if(!ids.includes(track.id))ids=[track.id,...ids]
     if(mode==='shuffle')ids=[track.id,...mix(ids.filter(id=>id!==track.id))]
     const nextIndex=Math.max(0,ids.indexOf(track.id))
     setQueue(ids);queueRef.current=ids
-    setIndex(nextIndex);idxRef.current=nextIndex
-    setCurrent(track);currentRef.current=track
-    loadTrackIntoAudio(track,autoplay,changed)
-  },[homeTracks,mode,report,loadTrackIntoAudio])
+    activateTrack(track,nextIndex,autoplay,true,true)
+  },[activateTrack,homeTracks,mode])
 
-  const byIndex=useCallback((target:number)=>{
+  const byIndex=useCallback((target:number,completedAlready=false)=>{
     const ids=queueRef.current
     if(!ids.length)return
     const nextIndex=(target+ids.length)%ids.length
     const track=allTracksRef.current.find(item=>item.id===ids[nextIndex])
     if(!track)return
-    report(false)
-    setIndex(nextIndex);idxRef.current=nextIndex
-    setCurrent(track);currentRef.current=track
-    loadTrackIntoAudio(track,true,true)
-  },[report,loadTrackIntoAudio])
+    activateTrack(track,nextIndex,true,true,!completedAlready)
+  },[activateTrack])
 
-  const next=useCallback(()=>byIndex(idxRef.current+1),[byIndex])
+  const next=useCallback(()=>byIndex(idxRef.current+1,false),[byIndex])
   const prev=useCallback(()=>{
-    if(audio.currentTime>4){audio.currentTime=0;return}
-    byIndex(idxRef.current-1)
-  },[audio,byIndex])
+    const player=activeAudioRef.current
+    if(player.currentTime>4){player.currentTime=0;return}
+    byIndex(idxRef.current-1,false)
+  },[byIndex])
 
   useEffect(()=>{
     if(!current)return
-    if(audio.dataset.trackId!==current.id){
-      loadTrackIntoAudio(current,false,true)
+    const player=activeAudioRef.current
+    if(player.dataset.trackId!==current.id){
+      activateTrack(current,idxRef.current,false,false,false)
     }else{
-      updateMediaSession(current,audio.paused?'paused':'playing')
+      updateMediaSession(current,player.paused?'paused':'playing')
+      if(!player.paused)prepareStandby(idxRef.current)
     }
-  },[current,audio,loadTrackIntoAudio,updateMediaSession])
+  },[current,activateTrack,prepareStandby,updateMediaSession])
 
   useEffect(()=>{
-    const onPlay=()=>{
-      setPlaying(true)
-      failedAdvanceRef.current=0
-      const track=currentRef.current
-      if(track)updateMediaSession(track,'playing')
-    }
-    const onPause=()=>{
-      setPlaying(false)
-      if(audio.ended&&settingsRef.current.autoplay)return
-      if('mediaSession'in navigator){
-        try{navigator.mediaSession.playbackState='paused'}catch{}
-      }
-    }
-    const onTime=()=>{
-      setPos(audio.currentTime)
-      startRef.current=Math.max(startRef.current,audio.currentTime)
-      if('mediaSession'in navigator&&Number.isFinite(audio.duration)&&audio.duration>0){
-        try{navigator.mediaSession.setPositionState({duration:audio.duration,playbackRate:audio.playbackRate,position:Math.min(audio.currentTime,audio.duration)})}catch{}
-      }
-    }
-    const onMeta=()=>{
-      setDur(audio.duration||currentRef.current?.duration||0)
-      const track=currentRef.current
-      if(track)updateMediaSession(track,audio.paused?'paused':'playing')
-    }
-    const onWaiting=()=>{
-      if('mediaSession'in navigator&&!audio.paused){
-        try{navigator.mediaSession.playbackState='playing'}catch{}
-      }
-    }
-    const onEnd=()=>{
-      report(true)
-      if(settingsRef.current.autoplay){
-        if('mediaSession'in navigator){
-          try{navigator.mediaSession.playbackState='playing'}catch{}
-        }
-        next()
-      }else if('mediaSession'in navigator){
-        try{navigator.mediaSession.playbackState='paused'}catch{}
-      }
-    }
-    const onError=()=>{
-      const queueLength=queueRef.current.length
-      if(!settingsRef.current.autoplay||queueLength<2)return
-      failedAdvanceRef.current+=1
-      if(failedAdvanceRef.current<queueLength){
-        next()
-      }else{
+    const players=[audioA,audioB]
+
+    const bind=(player:HTMLAudioElement)=>{
+      const isActive=()=>activeAudioRef.current===player
+      const onPlay=()=>{
+        if(!isActive())return
+        setPlaying(true)
         failedAdvanceRef.current=0
+        const track=currentRef.current
+        if(track)updateMediaSession(track,'playing')
+        prepareStandby(idxRef.current)
+      }
+      const onPause=()=>{
+        if(!isActive())return
+        if(player.ended&&settingsRef.current.autoplay)return
+        setPlaying(false)
         if('mediaSession'in navigator){
           try{navigator.mediaSession.playbackState='paused'}catch{}
         }
-        setToast('Could not continue playback. Some tracks are unavailable.')
+      }
+      const onTime=()=>{
+        if(!isActive())return
+        setPos(player.currentTime)
+        startRef.current=Math.max(startRef.current,player.currentTime)
+        if('mediaSession'in navigator&&Number.isFinite(player.duration)&&player.duration>0){
+          try{navigator.mediaSession.setPositionState({duration:player.duration,playbackRate:player.playbackRate,position:Math.min(player.currentTime,player.duration)})}catch{}
+        }
+      }
+      const onMeta=()=>{
+        if(!isActive())return
+        setDur(player.duration||currentRef.current?.duration||0)
+        const track=currentRef.current
+        if(track)updateMediaSession(track,player.paused?'paused':'playing')
+        prepareStandby(idxRef.current)
+      }
+      const onWaiting=()=>{
+        if(!isActive())return
+        if('mediaSession'in navigator){
+          try{navigator.mediaSession.playbackState='playing'}catch{}
+        }
+      }
+      const onEnd=()=>{
+        if(!isActive())return
+        report(true)
+        if(settingsRef.current.autoplay){
+          setPlaying(true)
+          if('mediaSession'in navigator){
+            try{navigator.mediaSession.playbackState='playing'}catch{}
+          }
+          byIndex(idxRef.current+1,true)
+        }else{
+          setPlaying(false)
+          if('mediaSession'in navigator){
+            try{navigator.mediaSession.playbackState='paused'}catch{}
+          }
+        }
+      }
+      const onError=()=>{
+        if(!isActive())return
+        const queueLength=queueRef.current.length
+        if(!settingsRef.current.autoplay||queueLength<2)return
+        failedAdvanceRef.current+=1
+        if(failedAdvanceRef.current<queueLength){
+          byIndex(idxRef.current+1,true)
+        }else{
+          failedAdvanceRef.current=0
+          setPlaying(false)
+          if('mediaSession'in navigator){
+            try{navigator.mediaSession.playbackState='paused'}catch{}
+          }
+          setToast('Could not continue playback. Some tracks are unavailable.')
+        }
+      }
+
+      player.addEventListener('play',onPlay)
+      player.addEventListener('pause',onPause)
+      player.addEventListener('timeupdate',onTime)
+      player.addEventListener('loadedmetadata',onMeta)
+      player.addEventListener('canplay',onMeta)
+      player.addEventListener('waiting',onWaiting)
+      player.addEventListener('stalled',onWaiting)
+      player.addEventListener('ended',onEnd)
+      player.addEventListener('error',onError)
+
+      return()=>{
+        player.removeEventListener('play',onPlay)
+        player.removeEventListener('pause',onPause)
+        player.removeEventListener('timeupdate',onTime)
+        player.removeEventListener('loadedmetadata',onMeta)
+        player.removeEventListener('canplay',onMeta)
+        player.removeEventListener('waiting',onWaiting)
+        player.removeEventListener('stalled',onWaiting)
+        player.removeEventListener('ended',onEnd)
+        player.removeEventListener('error',onError)
       }
     }
 
-    audio.addEventListener('play',onPlay)
-    audio.addEventListener('pause',onPause)
-    audio.addEventListener('timeupdate',onTime)
-    audio.addEventListener('loadedmetadata',onMeta)
-    audio.addEventListener('waiting',onWaiting)
-    audio.addEventListener('ended',onEnd)
-    audio.addEventListener('error',onError)
-
-    return()=>{
-      audio.removeEventListener('play',onPlay)
-      audio.removeEventListener('pause',onPause)
-      audio.removeEventListener('timeupdate',onTime)
-      audio.removeEventListener('loadedmetadata',onMeta)
-      audio.removeEventListener('waiting',onWaiting)
-      audio.removeEventListener('ended',onEnd)
-      audio.removeEventListener('error',onError)
-    }
-  },[audio,next,report,updateMediaSession])
+    const cleanups=players.map(bind)
+    return()=>cleanups.forEach(cleanup=>cleanup())
+  },[audioA,audioB,byIndex,prepareStandby,report,updateMediaSession])
 
   useEffect(()=>{
     if(!('mediaSession'in navigator))return
     const handlers:[MediaSessionAction,MediaSessionActionHandler][]=[
       ['play',()=>{
+        const player=activeAudioRef.current
         const track=currentRef.current
         if(track)updateMediaSession(track,'playing')
-        void audio.play().catch(()=>{})
+        void player.play().catch(()=>{})
       }],
       ['pause',()=>{
-        audio.pause()
+        const player=activeAudioRef.current
+        player.pause()
         try{navigator.mediaSession.playbackState='paused'}catch{}
       }],
       ['previoustrack',prev],
       ['nexttrack',next],
-      ['seekbackward',details=>audio.currentTime=Math.max(0,audio.currentTime-(details.seekOffset||10))],
-      ['seekforward',details=>audio.currentTime=Math.min(audio.duration||Infinity,audio.currentTime+(details.seekOffset||10))],
-      ['seekto',details=>{if(details.seekTime!=null)audio.currentTime=details.seekTime}]
+      ['seekbackward',details=>{
+        const player=activeAudioRef.current
+        player.currentTime=Math.max(0,player.currentTime-(details.seekOffset||10))
+      }],
+      ['seekforward',details=>{
+        const player=activeAudioRef.current
+        player.currentTime=Math.min(player.duration||Infinity,player.currentTime+(details.seekOffset||10))
+      }],
+      ['seekto',details=>{
+        const player=activeAudioRef.current
+        if(details.seekTime!=null)player.currentTime=details.seekTime
+      }]
     ]
     handlers.forEach(([action,handler])=>{try{navigator.mediaSession.setActionHandler(action,handler)}catch{}})
     return()=>handlers.forEach(([action])=>{try{navigator.mediaSession.setActionHandler(action,null)}catch{}})
-  },[audio,next,prev,updateMediaSession])
+  },[next,prev,updateMediaSession])
 
   useEffect(()=>{
     const timer=setInterval(()=>{
@@ -541,7 +670,7 @@ export default function App(){
         body:{
           queueTrackIds:queueRef.current,
           currentIndex:idxRef.current,
-          positionMs:Math.round(audio.currentTime*1000),
+          positionMs:Math.round(activeAudioRef.current.currentTime*1000),
           mode,
           filterState:{homeGenre,homeSearch,sourceFilter},
           sortState:{field:sort}
@@ -549,7 +678,7 @@ export default function App(){
       }).catch(()=>{})
     },15000)
     return()=>clearInterval(timer)
-  },[audio,mode,homeGenre,homeSearch,sourceFilter,sort,needsDb])
+  },[mode,homeGenre,homeSearch,sourceFilter,sort,needsDb])
 
   const preference=async(track:Track,value:'liked'|'disliked'|'neutral')=>{
     setData(currentData=>({...currentData,preferences:[
@@ -635,12 +764,12 @@ export default function App(){
                 {current.bpm&&<span>{Math.round(current.bpm)} BPM</span>}
                 {current.mood&&<span>{current.mood}</span>}
               </div>
-              <input className="range" type="range" min="0" max={Math.max(1,dur||current.duration)} value={Math.min(pos,Math.max(1,dur||current.duration))} onChange={event=>audio.currentTime=Number(event.target.value)}/>
+              <input className="range" type="range" min="0" max={Math.max(1,dur||current.duration)} value={Math.min(pos,Math.max(1,dur||current.duration))} onChange={event=>activeAudioRef.current.currentTime=Number(event.target.value)}/>
               <div className="times"><span>{fmt(pos)}</span><span>{fmt(dur||current.duration)}</span></div>
               <div className="controls">
                 <button className={mode==='shuffle'?'active':''} onClick={toggleShuffle}><Shuffle/></button>
                 <button onClick={prev}><SkipBack fill="currentColor"/></button>
-                <button className="play" onClick={()=>playing?audio.pause():void audio.play()}>{playing?<Pause fill="currentColor"/>:<Play fill="currentColor"/>}</button>
+                <button className="play" onClick={()=>playing?activeAudioRef.current.pause():void activeAudioRef.current.play()}>{playing?<Pause fill="currentColor"/>:<Play fill="currentColor"/>}</button>
                 <button onClick={next}><SkipForward fill="currentColor"/></button>
                 <button className={prefMap.get(current.id)?.liked?'liked':''} onClick={()=>toggleLike(current)}><Heart fill={prefMap.get(current.id)?.liked?'currentColor':'none'}/></button>
               </div>
@@ -827,7 +956,7 @@ export default function App(){
     {view!=='home'&&current&&<div className="mini-player" role="button" tabIndex={0} onClick={()=>setView('home')} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();setView('home')}}}>
       <img src={cover(current)} alt="" onError={onArtworkError}/>
       <span><b>{current.title}</b><small>{current.artist} · {sourceName(current)}</small></span>
-      <button aria-label={playing?'Pause':'Play'} onClick={event=>{event.stopPropagation();playing?audio.pause():void audio.play()}}>{playing?<Pause size={18} fill="currentColor"/>:<Play size={18} fill="currentColor"/>}</button>
+      <button aria-label={playing?'Pause':'Play'} onClick={event=>{event.stopPropagation();playing?activeAudioRef.current.pause():void activeAudioRef.current.play()}}>{playing?<Pause size={18} fill="currentColor"/>:<Play size={18} fill="currentColor"/>}</button>
     </div>}
 
     <nav className="nav">
