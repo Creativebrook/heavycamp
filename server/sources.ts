@@ -267,6 +267,26 @@ export async function getNewReleaseScan(limit = 40) {
   return dedupe([...jamendo,...audius])
 }
 
+export async function resolveRemoteArtwork(source: TrackSource, sourceId: string): Promise<string | null> {
+  if (source === 'jamendo') {
+    const rows = await jamendoRequest({ id: sourceId }, 1)
+    return rows[0]?.artworkUrl || null
+  }
+
+  if (source === 'audius') {
+    const response = await fetch(`${AUDIUS}/tracks/${encodeURIComponent(sourceId)}`, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(12000),
+    })
+    if (!response.ok) return null
+    const json: any = await response.json().catch(() => null)
+    const artwork = json?.data?.artwork
+    return artwork?.['1000x1000'] || artwork?.['480x480'] || artwork?.['150x150'] || null
+  }
+
+  return null
+}
+
 export async function resolveRemoteStream(trackId: string): Promise<string | null> {
   if (trackId.startsWith('jamendo:')) {
     const sourceId = trackId.slice('jamendo:'.length)
