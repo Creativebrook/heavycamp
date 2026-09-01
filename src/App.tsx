@@ -290,7 +290,7 @@ export default function App(){
       setLikedTracks(savedLikes)
       const nextSettings={...DEFAULT_SETTINGS,...(user.settings||{})}
       setSettings(nextSettings)
-      setMode(user.state?.mode||nextSettings.defaultMode)
+      setMode(nextSettings.defaultMode)
 
       const combined=uniqueTracks([
         ...libraryResponse.tracks,
@@ -698,11 +698,18 @@ export default function App(){
     const nextMode=mode==='shuffle'?'sequential':'shuffle'
     setMode(nextMode)
     if(!current)return
-    let ids=homeTracks.map(track=>track.id)
-    if(nextMode==='shuffle')ids=[current.id,...mix(ids.filter(id=>id!==current.id))]
+
+    const visibleIds=homeTracks.slice(0,120).map(track=>track.id)
+    let ids=visibleIds.includes(current.id)?visibleIds:[current.id,...visibleIds]
+
+    if(nextMode==='shuffle'){
+      ids=[current.id,...mix(ids.filter(id=>id!==current.id))]
+    }
+
     setQueue(ids);queueRef.current=ids
     const nextIndex=Math.max(0,ids.indexOf(current.id))
     setIndex(nextIndex);idxRef.current=nextIndex
+    prepareStandby(nextIndex)
   }
 
   const createPlaylist=async(name:string)=>{
@@ -878,7 +885,7 @@ export default function App(){
             </div>
             <div className="settings-row">
               <span><b>Default mode</b><small>Choose how every queue starts.</small></span>
-              <select aria-label="Default playback mode" value={settings.defaultMode} onChange={event=>setSettings({...settings,defaultMode:event.target.value as any})}><option value="sequential">In order</option><option value="shuffle">Random</option></select>
+              <select aria-label="Default playback mode" value={settings.defaultMode} onChange={event=>{const nextMode=event.target.value as 'sequential'|'shuffle';setSettings({...settings,defaultMode:nextMode});setMode(nextMode)}}><option value="sequential">In order</option><option value="shuffle">Random</option></select>
             </div>
             <label className="settings-row settings-toggle-row">
               <span><b>Autoplay next</b><small>Continue to the next track automatically.</small></span>
