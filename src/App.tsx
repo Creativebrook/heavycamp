@@ -22,7 +22,17 @@ const fmt=(seconds:number)=>{
   const value=Math.max(0,Number(seconds)||0)
   return `${Math.floor(value/60)}:${Math.floor(value%60).toString().padStart(2,'0')}`
 }
-const cover=(track?:Track|null)=>track?.artworkUrl||(track?.coverArt?`/api/cover?id=${encodeURIComponent(track.coverArt)}`:'/icon-192.png')
+const cover=(track?:Track|null)=>{
+  if(!track)return '/icon-192.png'
+  if(track.source==='bandcamp'&&track.coverArt)return `/api/artwork?source=bandcamp&id=${encodeURIComponent(track.coverArt)}`
+  if((track.source==='jamendo'||track.source==='audius')&&track.sourceId)return `/api/artwork?source=${track.source}&id=${encodeURIComponent(track.sourceId)}`
+  return track.artworkUrl||'/icon-192.png'
+}
+const mediaArtwork=(track:Track)=>new URL(cover(track),window.location.origin).href
+const onArtworkError=(event:any)=>{
+  const image=event.currentTarget as HTMLImageElement
+  if(!image.src.endsWith('/icon-192.png'))image.src='/icon-192.png'
+}
 const dateValue=(track:Track)=>track.created?Date.parse(track.created)||0:(track.year?Date.parse(`${track.year}-01-01`):0)
 const mix=<T,>(items:T[])=>{const copy=[...items];for(let i=copy.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[copy[i],copy[j]]=[copy[j],copy[i]]}return copy}
 const uniqueTracks=(items:Track[])=>{const seen=new Set<string>();return items.filter(track=>track?.id&&!seen.has(track.id)&&(seen.add(track.id),true))}
@@ -109,7 +119,7 @@ function TrackList({
   return <div className="tracks">
     {tracks.map(track=><article className={current?.id===track.id?'current':''} key={track.id}>
       <button className="row-main" onClick={()=>onPlay(track,tracks)}>
-        <img src={cover(track)} alt=""/>
+        <img src={cover(track)} alt="" onError={onArtworkError}/>
         <span className="track-copy">
           <b>{track.title}</b>
           <small>{track.artist} · {track.album}</small>
@@ -132,7 +142,7 @@ function TrackRail({title,subtitle,tracks,onPlay}:{title:string;subtitle:string;
     <div className="section-heading"><div><h2>{title}</h2><p>{subtitle}</p></div><span>{tracks.length}</span></div>
     <div className="track-rail">
       {tracks.map(track=><button className="discover-card" key={track.id} onClick={()=>onPlay(track,tracks)}>
-        <img src={cover(track)} alt=""/>
+        <img src={cover(track)} alt="" onError={onArtworkError}/>
         <span className="discover-card-copy">
           <SourceBadge track={track}/>
           <b>{track.title}</b>
@@ -185,7 +195,9 @@ export default function App(){
   const idxRef=useRef(0)
   const currentRef=useRef<Track|null>(null)
   const startRef=useRef(0)
-  const autoplayRef=useRef(false)
+  const allTracksRef=useRef<Track[]>([])
+  const settingsRef=useRef<AppSettings>(DEFAULT_SETTINGS)
+  const failedAdvanceRef=useRef(0)
   const allTracks=useMemo(()=>uniqueTracks([
     ...library,...discover.featured,...discover.newReleases,...discover.trending,...discoverResults,...likedTracks,
     ...playlists.flatMap(playlist=>playlist.tracks||[])
@@ -286,6 +298,8 @@ export default function App(){
   useEffect(()=>{queueRef.current=queue},[queue])
   useEffect(()=>{idxRef.current=index},[index])
   useEffect(()=>{currentRef.current=current},[current])
+  useEffect(()=>{allTracksRef.current=allTracks},[allTracks])
+  useEffect(()=>{settingsRef.current=settings},[settings])
 
   useEffect(()=>{
     const params=new URLSearchParams(location.search)
@@ -330,29 +344,81 @@ export default function App(){
     startRef.current=0
   },[needsDb,mode,view])
 
+  const updateMediaSession=useCallback((track:Track,state?:'playing'|'paused'|'none')=>{
+    if(!('mediaSession'in navigator))return
+    try{
+      const artwork=mediaArtwork(track)
+      navigator.mediaSession.metadata=new MediaMetadata({
+        title:track.title,
+        artist:track.artist,
+        album:track.album,
+        artwork:[
+          {src:artwork,sizes:'512x512'},
+          {src:artwork,sizes:'256x256'}
+        ]
+      })
+      if(state)navigator.mediaSession.playbackState=state
+    }catch(error){
+      console.warn('HeavyCamp media session metadata error',error)
+    }
+  },[])
+
+  const loadTrackIntoAudio=useCallback((track:Track,shouldPlay:boolean,forceReload=false)=>{
+    const changed=forceReload||audio.dataset.trackId!==track.id
+    if(changed){
+      audio.dataset.trackId=track.id
+      audio.preload='auto'
+      audio.src=`/api/stream?id=${encodeURIComponent(track.id)}`
+      setPos(0)
+      setDur(track.duration||0)
+      startRef.current=0
+    }
+
+    updateMediaSession(track,shouldPlay?'playing':'paused')
+
+    if(shouldPlay){
+      const promise=audio.play()
+      if(promise){
+        void promise.then(()=>{
+          if('mediaSession'in navigator){
+            try{navigator.mediaSession.playbackState='playing'}catch{}
+          }
+        }).catch(error=>{
+          console.warn('HeavyCamp play() failed',error)
+          if('mediaSession'in navigator){
+            try{navigator.mediaSession.playbackState='paused'}catch{}
+          }
+        })
+      }
+    }else if(changed){
+      audio.load()
+    }
+  },[audio,updateMediaSession])
+
   const playTrack=useCallback((track:Track,list:Track[]=homeTracks,autoplay=true)=>{
-    if(currentRef.current?.id!==track.id)report(false)
+    const changed=currentRef.current?.id!==track.id
+    if(changed)report(false)
     let ids=uniqueTracks(list).map(item=>item.id)
     if(!ids.includes(track.id))ids=[track.id,...ids]
     if(mode==='shuffle')ids=[track.id,...mix(ids.filter(id=>id!==track.id))]
     const nextIndex=Math.max(0,ids.indexOf(track.id))
     setQueue(ids);queueRef.current=ids
     setIndex(nextIndex);idxRef.current=nextIndex
-    autoplayRef.current=autoplay
     setCurrent(track);currentRef.current=track
-  },[homeTracks,mode,report])
+    loadTrackIntoAudio(track,autoplay,changed)
+  },[homeTracks,mode,report,loadTrackIntoAudio])
 
   const byIndex=useCallback((target:number)=>{
     const ids=queueRef.current
     if(!ids.length)return
     const nextIndex=(target+ids.length)%ids.length
-    const track=allTracks.find(item=>item.id===ids[nextIndex])
+    const track=allTracksRef.current.find(item=>item.id===ids[nextIndex])
     if(!track)return
     report(false)
     setIndex(nextIndex);idxRef.current=nextIndex
-    autoplayRef.current=true
     setCurrent(track);currentRef.current=track
-  },[allTracks,report])
+    loadTrackIntoAudio(track,true,true)
+  },[report,loadTrackIntoAudio])
 
   const next=useCallback(()=>byIndex(idxRef.current+1),[byIndex])
   const prev=useCallback(()=>{
@@ -362,24 +428,27 @@ export default function App(){
 
   useEffect(()=>{
     if(!current)return
-    audio.src=`/api/stream?id=${encodeURIComponent(current.id)}`
-    audio.load()
-    setPos(0);setDur(current.duration||0);startRef.current=0
-    if(autoplayRef.current)void audio.play().catch(()=>{})
-    autoplayRef.current=false
-    if('mediaSession'in navigator){
-      navigator.mediaSession.metadata=new MediaMetadata({
-        title:current.title,
-        artist:current.artist,
-        album:current.album,
-        artwork:[{src:cover(current),sizes:'192x192'}]
-      })
+    if(audio.dataset.trackId!==current.id){
+      loadTrackIntoAudio(current,false,true)
+    }else{
+      updateMediaSession(current,audio.paused?'paused':'playing')
     }
-  },[current,audio])
+  },[current,audio,loadTrackIntoAudio,updateMediaSession])
 
   useEffect(()=>{
-    const onPlay=()=>setPlaying(true)
-    const onPause=()=>setPlaying(false)
+    const onPlay=()=>{
+      setPlaying(true)
+      failedAdvanceRef.current=0
+      const track=currentRef.current
+      if(track)updateMediaSession(track,'playing')
+    }
+    const onPause=()=>{
+      setPlaying(false)
+      if(audio.ended&&settingsRef.current.autoplay)return
+      if('mediaSession'in navigator){
+        try{navigator.mediaSession.playbackState='paused'}catch{}
+      }
+    }
     const onTime=()=>{
       setPos(audio.currentTime)
       startRef.current=Math.max(startRef.current,audio.currentTime)
@@ -387,23 +456,82 @@ export default function App(){
         try{navigator.mediaSession.setPositionState({duration:audio.duration,playbackRate:audio.playbackRate,position:Math.min(audio.currentTime,audio.duration)})}catch{}
       }
     }
-    const onMeta=()=>setDur(audio.duration||currentRef.current?.duration||0)
-    const onEnd=()=>{report(true);if(settings.autoplay)next()}
-    audio.addEventListener('play',onPlay);audio.addEventListener('pause',onPause);audio.addEventListener('timeupdate',onTime);audio.addEventListener('loadedmetadata',onMeta);audio.addEventListener('ended',onEnd)
-    return()=>{audio.removeEventListener('play',onPlay);audio.removeEventListener('pause',onPause);audio.removeEventListener('timeupdate',onTime);audio.removeEventListener('loadedmetadata',onMeta);audio.removeEventListener('ended',onEnd)}
-  },[audio,next,report,settings.autoplay])
+    const onMeta=()=>{
+      setDur(audio.duration||currentRef.current?.duration||0)
+      const track=currentRef.current
+      if(track)updateMediaSession(track,audio.paused?'paused':'playing')
+    }
+    const onWaiting=()=>{
+      if('mediaSession'in navigator&&!audio.paused){
+        try{navigator.mediaSession.playbackState='playing'}catch{}
+      }
+    }
+    const onEnd=()=>{
+      report(true)
+      if(settingsRef.current.autoplay){
+        if('mediaSession'in navigator){
+          try{navigator.mediaSession.playbackState='playing'}catch{}
+        }
+        next()
+      }else if('mediaSession'in navigator){
+        try{navigator.mediaSession.playbackState='paused'}catch{}
+      }
+    }
+    const onError=()=>{
+      const queueLength=queueRef.current.length
+      if(!settingsRef.current.autoplay||queueLength<2)return
+      failedAdvanceRef.current+=1
+      if(failedAdvanceRef.current<queueLength){
+        next()
+      }else{
+        failedAdvanceRef.current=0
+        if('mediaSession'in navigator){
+          try{navigator.mediaSession.playbackState='paused'}catch{}
+        }
+        setToast('Could not continue playback. Some tracks are unavailable.')
+      }
+    }
+
+    audio.addEventListener('play',onPlay)
+    audio.addEventListener('pause',onPause)
+    audio.addEventListener('timeupdate',onTime)
+    audio.addEventListener('loadedmetadata',onMeta)
+    audio.addEventListener('waiting',onWaiting)
+    audio.addEventListener('ended',onEnd)
+    audio.addEventListener('error',onError)
+
+    return()=>{
+      audio.removeEventListener('play',onPlay)
+      audio.removeEventListener('pause',onPause)
+      audio.removeEventListener('timeupdate',onTime)
+      audio.removeEventListener('loadedmetadata',onMeta)
+      audio.removeEventListener('waiting',onWaiting)
+      audio.removeEventListener('ended',onEnd)
+      audio.removeEventListener('error',onError)
+    }
+  },[audio,next,report,updateMediaSession])
 
   useEffect(()=>{
     if(!('mediaSession'in navigator))return
     const handlers:[MediaSessionAction,MediaSessionActionHandler][]=[
-      ['play',()=>void audio.play()],['pause',()=>audio.pause()],['previoustrack',prev],['nexttrack',next],
+      ['play',()=>{
+        const track=currentRef.current
+        if(track)updateMediaSession(track,'playing')
+        void audio.play().catch(()=>{})
+      }],
+      ['pause',()=>{
+        audio.pause()
+        try{navigator.mediaSession.playbackState='paused'}catch{}
+      }],
+      ['previoustrack',prev],
+      ['nexttrack',next],
       ['seekbackward',details=>audio.currentTime=Math.max(0,audio.currentTime-(details.seekOffset||10))],
       ['seekforward',details=>audio.currentTime=Math.min(audio.duration||Infinity,audio.currentTime+(details.seekOffset||10))],
       ['seekto',details=>{if(details.seekTime!=null)audio.currentTime=details.seekTime}]
     ]
     handlers.forEach(([action,handler])=>{try{navigator.mediaSession.setActionHandler(action,handler)}catch{}})
     return()=>handlers.forEach(([action])=>{try{navigator.mediaSession.setActionHandler(action,null)}catch{}})
-  },[audio,next,prev])
+  },[audio,next,prev,updateMediaSession])
 
   useEffect(()=>{
     const timer=setInterval(()=>{
@@ -493,7 +621,7 @@ export default function App(){
         {current&&<section className="hero">
           <div className="blur" style={{backgroundImage:`url(${cover(current)})`}}/>
           <div className="hero-grid">
-            <img className="art" src={cover(current)} alt={`${current.album} cover`}/>
+            <img className="art" src={cover(current)} alt={`${current.album} cover`} onError={onArtworkError}/>
             <div className="meta">
               <div className="hero-kicker"><p className="eyebrow">NOW PLAYING</p><SourceBadge track={current}/></div>
               <h1>{current.title}</h1>
@@ -600,7 +728,7 @@ export default function App(){
           <div className="playlist-grid">
             {playlists.map(playlist=><button className="playlist-tile glass-panel" key={playlist.id} onClick={()=>setSelectedPlaylist(playlist.id)}>
               <div className="playlist-covers">
-                {(playlist.tracks||[]).slice(0,4).map(track=><img key={track.id} src={cover(track)} alt=""/>)}
+                {(playlist.tracks||[]).slice(0,4).map(track=><img key={track.id} src={cover(track)} alt="" onError={onArtworkError}/>)}
                 {!playlist.tracks?.length&&<ListMusic size={30}/>}
               </div>
               <span><b>{playlist.name}</b><small>{playlist.trackIds.length} {playlist.trackIds.length===1?'track':'tracks'}</small></span>
@@ -697,7 +825,7 @@ export default function App(){
     </main>
 
     {view!=='home'&&current&&<div className="mini-player" role="button" tabIndex={0} onClick={()=>setView('home')} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();setView('home')}}}>
-      <img src={cover(current)} alt=""/>
+      <img src={cover(current)} alt="" onError={onArtworkError}/>
       <span><b>{current.title}</b><small>{current.artist} · {sourceName(current)}</small></span>
       <button aria-label={playing?'Pause':'Play'} onClick={event=>{event.stopPropagation();playing?audio.pause():void audio.play()}}>{playing?<Pause size={18} fill="currentColor"/>:<Play size={18} fill="currentColor"/>}</button>
     </div>}
