@@ -39,3 +39,8 @@ npm run dev
 ```
 
 HeavyCamp only relies on Bandcamp endpoints that were verified against the current Bandcamp beta implementation. Unsupported/optional OpenSubsonic features fall back to HeavyCamp/Neon rather than being assumed available.
+
+
+## Privacidade e fontes
+
+A aplicação requer credenciais próprias para aceder à coleção e ao endpoint Subsonic da Bandcamp. Configure-as apenas como variáveis de ambiente e não partilhe tokens. O acesso e a reprodução dependem das permissões e disponibilidade da fonte; este projeto não substitui nem redistribui a coleção original.
